@@ -1,0 +1,8 @@
+# 配置文件：数据库路径、模型超参数等
+database:
+  path: "data/raw/"
+
+model:
+  learning_rate: 0.001
+  batch_size: 32
+  epochs: 10
