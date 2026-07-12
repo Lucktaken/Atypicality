@@ -1,8 +1,25 @@
-# 配置文件：数据库路径、模型超参数等
-database:
-  path: "data/raw/"
+# Atypicality 项目配置文件
+# 所有路径均不硬编码，统一在此配置
 
-model:
-  learning_rate: 0.001
-  batch_size: 32
-  epochs: 10
+paths:
+  # NAS 挂载路径（存放 100G+ 原始数据）
+  nas_mount: "/mnt/nas/atypicality/raw/"
+
+  # 本地原始数据路径（若不使用 NAS，可指向本地目录）
+  raw_data_local: "data/raw/"
+
+  # 中表输出路径（约 400M，由 build_interim_table.py 生成）
+  interim_data: "data/interim/"
+
+  # 研究问题小表输出根路径（由各 process_data.py 生成）
+  studies_output: "studies/"
+
+interim_table:
+  # 中表文件名
+  filename: "interim_table.parquet"
+  # 生成中表时的分块读取大小
+  chunk_size: 100000
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

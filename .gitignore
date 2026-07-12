@@ -1,12 +1,40 @@
-# 忽略大文件、数据库、环境配置
-data/*
-!data/**/.gitkeep
-models/*
-!models/**/.gitkeep
-*.db
-*.tsv
+# 数据文件（大文件隔离）
 *.csv
-*.env
+*.tsv
+*.parquet
+*.db
+*.pkl
+
+# data 目录下除 .gitkeep 外全部忽略
+data/raw/*
+!data/raw/.gitkeep
+data/interim/*
+!data/interim/.gitkeep
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Jupyter
 .ipynb_checkpoints/
+
+# 环境
+.env
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
