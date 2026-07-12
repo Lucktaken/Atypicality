@@ -5,9 +5,15 @@
 *.db
 *.pkl
 
+# 模型文件
+*.npy
+*.model
+
 # data 目录下除 .gitkeep 外全部忽略
 data/raw/*
 !data/raw/.gitkeep
+!data/raw/sciscinet/.gitkeep
+!data/raw/datacite/.gitkeep
 data/interim/*
 !data/interim/.gitkeep
 
@@ -22,6 +28,10 @@ build/
 
 # Jupyter
 .ipynb_checkpoints/
+colab/
+
+# 项目内部文档
+MIGRATION_PLAN.md
 
 # 环境
 .env

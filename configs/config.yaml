@@ -5,20 +5,42 @@ paths:
   # NAS 挂载路径（存放 100G+ 原始数据）
   nas_mount: "/mnt/nas/atypicality/raw/"
 
-  # 本地原始数据路径（若不使用 NAS，可指向本地目录）
+  # 本地原始数据路径
   raw_data_local: "data/raw/"
+  raw_sciscinet: "data/raw/sciscinet/"
+  raw_datacite: "data/raw/datacite/"
 
-  # 中表输出路径（约 400M，由 build_interim_table.py 生成）
+  # 中表与派生数据路径
   interim_data: "data/interim/"
+  interim_authors_info: "data/interim/authors_info.csv"
+  interim_core_table: "data/interim/authors_with_c3_c5_avg.csv"
+  interim_paper_atypicality: "data/interim/paper_level_data_atypicality.csv"
+  interim_embeddings: "data/interim/papers_with_embeddings.csv"
+  interim_q2: "data/interim/Q2/"
+  interim_modify: "data/interim/modify/"
 
-  # 研究问题小表输出根路径（由各 process_data.py 生成）
+  # 研究问题输出根路径
   studies_output: "studies/"
 
 interim_table:
-  # 中表文件名
-  filename: "interim_table.parquet"
-  # 生成中表时的分块读取大小
+  filename: "authors_with_c3_c5_avg.csv"
   chunk_size: 100000
+
+api:
+  openalex_base_url: "https://api.openalex.org/works/doi:"
+  openalex_email: "xuyifei@umich.edu"
+
+visualization:
+  font_family: "sans-serif"
+  font_sans:
+    - "Times New Roman"
+    - "Helvetica"
+    - "Arial"
+  pdf_fonttype: 42
+  fs_title: 24
+  fs_label: 20
+  fs_ticks: 18
+  fs_legend: 18
 
 logging:
   level: "INFO"
