@@ -15,7 +15,7 @@ def process_q1_data(config: dict) -> str:
 
     y_vars = ["H_index", "Productivity", "C3", "C5"]
     x_var = "Atypicality_of_datasets_original_1"
-    controls = ["Team_Size", "Avg_Citation_w/o_Self", "Academic_Age", "Topic_Diversity"]
+    controls = ["Average_Team_Size", "Avg_Citation_Without_Self", "Academic_Age", "Topic_Diversity"]
 
     available_y = [v for v in y_vars if v in df.columns]
     available_ctrl = [c for c in controls if c in df.columns]

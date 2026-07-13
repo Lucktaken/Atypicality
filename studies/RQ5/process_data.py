@@ -13,10 +13,10 @@ def process_rq5_data(config: dict) -> str:
     df = load_q2_table(config, "retention_authorlevel.csv")
     logger.info(f"加载 retention_authorlevel: {len(df)} 行")
 
-    duration_var = "Academic_Duration"
-    event_var = "Retained"
-    x_var = "Atypicality"
-    controls = ["H_index", "Publication_Count", "Academic_Age", "Topic_Diversity"]
+    duration_var = "Duration"
+    event_var = "Event"
+    x_var = "Atypicality_of_datasets_original_1"
+    controls = ["H_index", "Pub_Count", "Academic_Age", "Topic_Diversity"]
 
     available_ctrl = [c for c in controls if c in df.columns]
     all_cols = [duration_var, event_var, x_var] + available_ctrl

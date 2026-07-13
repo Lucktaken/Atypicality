@@ -27,10 +27,10 @@ def process_rq3_data(config: dict) -> str:
     except FileNotFoundError:
         logger.warning("未找到 atypicality_authorlevel_withCountry.csv，跳过")
 
-    y_var = "Atypicality"
+    y_var = "Atypicality_of_datasets_original_1"
     x_vars = ["H_index"]
-    controls = ["Academic_Age", "Team_Size", "Topic_Diversity"]
-    group_vars = ["Hemisphere", "Development_Status"]
+    controls = ["Academic_Age", "Average_Team_Size", "Topic_Diversity"]
+    group_vars = ["Hemisphere", "Develop_Status"]
 
     available_x = [v for v in x_vars if v in df.columns]
     available_ctrl = [c for c in controls if c in df.columns]

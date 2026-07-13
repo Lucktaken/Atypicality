@@ -105,12 +105,14 @@ def run_cox_ph(df: pd.DataFrame, duration_var: str, event_var: str,
     cph = CoxPHFitter()
     cph.fit(reg_df, duration_col=duration_var, event_col=event_var)
 
+    summary = cph.summary
     result = {
         "converged": True,
         "model": cph,
         "x_var": x_var,
         "coef": cph.params_.get(x_var, None),
-        "pvalue": cph.p_values().get(x_var, None),
+        "pvalue": summary.loc[x_var, "p"] if x_var in summary.index else None,
+        "std_err": summary.loc[x_var, "se(coef)"] if x_var in summary.index else None,
         "ci_lower": cph.confidence_intervals_.loc[x_var, "lower 95%"] if x_var in cph.confidence_intervals_.index else None,
         "ci_upper": cph.confidence_intervals_.loc[x_var, "upper 95%"] if x_var in cph.confidence_intervals_.index else None,
     }
@@ -131,3 +133,19 @@ def _extract_results(model, x_var: str, features: list) -> dict:
         "r_squared": getattr(model, "rsquared", None) or getattr(model, "pseudo_rsquared", None),
         "n_obs": int(model.nobs),
     }
+
+
+def save_results(results: dict, filepath: str):
+    """将回归结果字典保存为 CSV，剔除不可序列化的 model 对象。"""
+    import os
+    rows = []
+    for label, r in results.items():
+        row = {"label": label}
+        for k, v in r.items():
+            if k == "model":
+                continue
+            row[k] = v
+        rows.append(row)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    pd.DataFrame(rows).to_csv(filepath, index=False)
+    logger.info(f"回归结果已保存: {filepath}")

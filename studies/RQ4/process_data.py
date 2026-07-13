@@ -13,9 +13,9 @@ def process_rq4_data(config: dict) -> str:
     df = load_q2_table(config, "atypicality_authorlevel_withCountry.csv")
     logger.info(f"加载 atypicality_authorlevel_withCountry: {len(df)} 行")
 
-    y_var = "Atypicality"
-    controls = ["H_index", "Academic_Age", "Topic_Diversity", "Team_Size",
-                "Avg_Citation_w/o_Self", "Unique_Dataset_Use", "Avg_Dataset_Freq"]
+    y_var = "Atypicality_of_datasets_original_1"
+    controls = ["H_index", "Academic_Age", "Topic_Diversity", "Average_Team_Size",
+                "Avg_Citation_Without_Self", "unique_data_count", "repeated_data_usage"]
 
     available_ctrl = [c for c in controls if c in df.columns]
     all_cols = [y_var] + available_ctrl
