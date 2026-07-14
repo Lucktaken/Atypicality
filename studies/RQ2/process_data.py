@@ -1,16 +1,20 @@
 import os
 import sys
+import logging
 import pandas as pd
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, PROJECT_ROOT)
+
 from src.data_loader import load_config, load_core_table, load_q2_table, load_modify_table
 from src.regression import winsorize_df, standardize
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
 
 def process_rq2_data(config: dict) -> tuple:
-    """RQ2: 合并 paper-level atypicality + topic_distance + 控制变量，
-    生成全作者和第一作者两个回归宽表。"""
     df = load_core_table(config)
     logger.info(f"加载核心中表: {len(df)} 行")
 
@@ -44,23 +48,28 @@ def process_rq2_data(config: dict) -> tuple:
     os.makedirs(output_dir, exist_ok=True)
 
     all_author_path = os.path.join(output_dir, "rq2_all_author_ready.csv")
-    reg_df.to_csv(all_author_path, index=False)
+    if os.path.exists(all_author_path):
+        logger.info(f"全作者回归数据已存在，跳过生成: {all_author_path}")
+    else:
+        reg_df.to_csv(all_author_path, index=False)
+        logger.info(f"全作者回归数据已保存至: {all_author_path}")
 
     first_author_path = None
     if "Author_Position" in df.columns:
-        first_df = df[df["Author_Position"] == "first"][available_cols].dropna().copy()
-        first_df = winsorize_df(first_df, available_cols)
-        first_df = standardize(first_df, available_x + available_ctrl)
         first_author_path = os.path.join(output_dir, "rq2_first_author_ready.csv")
-        first_df.to_csv(first_author_path, index=False)
+        if os.path.exists(first_author_path):
+            logger.info(f"第一作者回归数据已存在，跳过生成: {first_author_path}")
+        else:
+            first_df = df[df["Author_Position"] == "first"][available_cols].dropna().copy()
+            first_df = winsorize_df(first_df, available_cols)
+            first_df = standardize(first_df, available_x + available_ctrl)
+            first_df.to_csv(first_author_path, index=False)
+            logger.info(f"第一作者回归数据已保存至: {first_author_path}")
 
     return all_author_path, first_author_path
 
 
 if __name__ == "__main__":
-    import logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
-    config = load_config()
+    config = load_config(os.path.join(PROJECT_ROOT, "configs", "config.yaml"))
     paths = process_rq2_data(config)
-    print(f"RQ2 回归数据已保存至: {paths}")
+    print(f"RQ2 回归数据: {paths}")

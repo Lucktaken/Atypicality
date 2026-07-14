@@ -4,9 +4,24 @@ import logging
 import pandas as pd
 
 
+def _resolve_paths(config: dict, base_dir: str) -> dict:
+    paths = config.get("paths", {})
+    resolved = {}
+    for key, val in paths.items():
+        if isinstance(val, str) and not os.path.isabs(val):
+            resolved[key] = os.path.normpath(os.path.join(base_dir, val))
+        else:
+            resolved[key] = val
+    config["paths"] = resolved
+    return config
+
+
 def load_config(config_path: str = "configs/config.yaml") -> dict:
-    with open(config_path, "r", encoding="utf-8") as f:
+    abs_config_path = os.path.abspath(config_path)
+    with open(abs_config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
+    base_dir = os.path.dirname(os.path.dirname(abs_config_path))
+    config = _resolve_paths(config, base_dir)
     return config
 
 
