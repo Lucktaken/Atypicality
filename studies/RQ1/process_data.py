@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
-def process_q1_data(config: dict) -> str:
+def process_rq1_data(config: dict) -> str:
     df = load_core_table(config)
     logger.info(f"加载核心中表: {len(df)} 行")
 
@@ -31,18 +31,18 @@ def process_q1_data(config: dict) -> str:
     reg_df = winsorize_df(reg_df, available_cols)
     reg_df = standardize(reg_df, [x_var] + available_ctrl)
 
-    output_dir = os.path.join(config["paths"]["studies_output"], "Q1")
+    output_dir = os.path.join(config["paths"]["studies_output"], "RQ1")
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, "q1_regression_ready.csv")
+    output_path = os.path.join(output_dir, "rq1_regression_ready.csv")
     if os.path.exists(output_path):
         logger.info(f"回归数据已存在，跳过生成: {output_path}")
         return output_path
     reg_df.to_csv(output_path, index=False)
-    logger.info(f"Q1 回归数据已保存至: {output_path}")
+    logger.info(f"RQ1 回归数据已保存至: {output_path}")
     return output_path
 
 
 if __name__ == "__main__":
     config = load_config(os.path.join(PROJECT_ROOT, "configs", "config.yaml"))
-    path = process_q1_data(config)
-    print(f"Q1 回归数据: {path}")
+    path = process_rq1_data(config)
+    print(f"RQ1 回归数据: {path}")

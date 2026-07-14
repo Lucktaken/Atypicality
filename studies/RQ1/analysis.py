@@ -23,10 +23,10 @@ logger = logging.getLogger(__name__)
 
 
 def get_study_dir(config):
-    return os.path.join(PROJECT_ROOT, config["paths"]["studies_output"], "Q1")
+    return os.path.join(PROJECT_ROOT, config["paths"]["studies_output"], "RQ1")
 
 
-def run_q1_regressions(df):
+def run_rq1_regressions(df):
     x_var = "Atypicality_of_datasets_original_1"
     controls = ["Average_Team_Size", "Avg_Citation_Without_Self", "Academic_Age", "Topic_Diversity"]
     controls = [c for c in controls if c in df.columns]
@@ -110,7 +110,7 @@ def save_results_csv(results, filepath):
     logger.info(f"Results saved: {filepath}")
 
 
-def plot_forest_chart(results, title="Q1: Effect of Data Atypicality on Academic Success",
+def plot_forest_chart(results, title="RQ1: Effect of Data Atypicality on Academic Success",
                       output_path=None):
     plt.rcParams["font.family"] = "serif"
     plt.rcParams["font.serif"] = ["Times New Roman", "DejaVu Serif"]
@@ -165,7 +165,7 @@ def plot_forest_chart(results, title="Q1: Effect of Data Atypicality on Academic
 
     if output_path:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        fig.savefig(output_path, dpi=300, bbox_inches="tight", facecolor="white", pil_kwargs={"quality": 95})
         logger.info(f"Figure saved: {output_path}")
     plt.close(fig)
     return fig
@@ -175,17 +175,17 @@ def main():
     config = load_config(os.path.join(PROJECT_ROOT, "configs", "config.yaml"))
     study_dir = get_study_dir(config)
 
-    data_path = os.path.join(study_dir, "q1_regression_ready.csv")
+    data_path = os.path.join(PROJECT_ROOT, config["paths"]["interim_core_table"])
     if not os.path.exists(data_path):
         logger.error(f"Data file not found: {data_path}")
         sys.exit(1)
 
     df = pd.read_csv(data_path)
-    logger.info(f"Loaded Q1 data: {df.shape}")
+    logger.info(f"Loaded RQ1 data: {df.shape}")
 
-    results = run_q1_regressions(df)
+    results = run_rq1_regressions(df)
 
-    results_path = os.path.join(study_dir, "results", "q1_regression_results.csv")
+    results_path = os.path.join(study_dir, "results", "rq1_regression_results.csv")
     save_results_csv(results, results_path)
 
     figures_dir = os.path.join(study_dir, "figures")
@@ -193,11 +193,11 @@ def main():
 
     plot_forest_chart(
         results,
-        title="Q1: Effect of Data Atypicality on Academic Success",
-        output_path=os.path.join(figures_dir, "q1_forest_plot.pdf"),
+        title="RQ1: Effect of Data Atypicality on Academic Success",
+        output_path=os.path.join(figures_dir, "rq1_forest_plot.jpg"),
     )
 
-    logger.info("Q1 analysis complete.")
+    logger.info("RQ1 analysis complete.")
 
 
 if __name__ == "__main__":

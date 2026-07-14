@@ -134,7 +134,7 @@ def plot_umap_projection(w2v_model, output_path=None):
 
     if output_path:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        fig.savefig(output_path, dpi=300, bbox_inches="tight", facecolor="white", pil_kwargs={"quality": 95})
         logger.info(f"Figure saved: {output_path}")
     plt.close(fig)
     return fig
@@ -176,8 +176,8 @@ def plot_descriptive_stats(author_stats, df_rq6, output_dir=None):
 
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
-        fig.savefig(os.path.join(output_dir, "rq6_descriptive_stats.pdf"), dpi=300, bbox_inches="tight")
-        logger.info(f"Figure saved: {output_dir}/rq6_descriptive_stats.pdf")
+        fig.savefig(os.path.join(output_dir, "rq6_descriptive_stats.jpg"), dpi=300, bbox_inches="tight", facecolor="white", pil_kwargs={"quality": 95})
+        logger.info(f"Figure saved: {output_dir}/rq6_descriptive_stats.jpg")
     plt.close(fig)
     return fig
 
@@ -194,11 +194,7 @@ def main():
 
     author_stats = compute_author_stats(config)
 
-    ready_path = os.path.join(study_dir, "rq6_analysis_ready.csv")
-    if os.path.exists(ready_path):
-        df_rq6 = pd.read_csv(ready_path)
-    else:
-        df_rq6 = author_stats.copy()
+    df_rq6 = author_stats.copy()
     logger.info(f"RQ6 data: {df_rq6.shape}")
 
     results_dir = os.path.join(study_dir, "results")
@@ -213,7 +209,7 @@ def main():
     if w2v_model is not None:
         plot_umap_projection(
             w2v_model,
-            output_path=os.path.join(figures_dir, "rq6_umap_projection.pdf"),
+            output_path=os.path.join(figures_dir, "rq6_umap_projection.jpg"),
         )
 
     logger.info("RQ6 analysis complete.")

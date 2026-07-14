@@ -20,10 +20,13 @@ def setup_style(config: dict = None):
     plt.rcParams["pdf.fonttype"] = vis_cfg.get("pdf_fonttype", 42)
 
 
-def save_fig(fig: plt.Figure, filepath: str, dpi: int = 300):
+def save_fig(fig: plt.Figure, filepath: str, dpi: int = 300, quality: int = 95):
     """保存图表到文件。"""
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    fig.savefig(filepath, dpi=dpi, bbox_inches="tight")
+    kwargs = {"dpi": dpi, "bbox_inches": "tight", "facecolor": "white"}
+    if filepath.lower().endswith((".jpg", ".jpeg")):
+        kwargs["pil_kwargs"] = {"quality": quality}
+    fig.savefig(filepath, **kwargs)
     plt.close(fig)
     logger.info(f"图表已保存: {filepath}")
 

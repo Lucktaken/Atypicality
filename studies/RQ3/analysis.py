@@ -240,7 +240,7 @@ def plot_butterfly_chart(plot_df, output_path=None):
 
     if output_path:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        fig.savefig(output_path, dpi=300, bbox_inches="tight", facecolor="white", pil_kwargs={"quality": 95})
         logger.info(f"Figure saved: {output_path}")
     plt.close(fig)
     return fig
@@ -271,7 +271,7 @@ def main():
 
     plot_butterfly_chart(
         plot_df,
-        output_path=os.path.join(figures_dir, "rq3_butterfly.pdf"),
+        output_path=os.path.join(figures_dir, "rq3_butterfly.jpg"),
     )
 
     logger.info("RQ3 analysis complete.")

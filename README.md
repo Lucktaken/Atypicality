@@ -63,33 +63,31 @@ Atypicality/
 
 提供两种复现路径，均**不需要从 SciSciNet 原始数据（100G+）开始**。根据手头已有的数据文件选择合适方案。
 
-### 方案 A：只回归（利用现成小表直接分析）
+### 方案 A：只回归（直接从中表数据运行分析）
 
-> **适用场景**：已有各研究问题的回归宽表，只需运行回归和出图。
+> **适用场景**：已有 `data/interim/` 下的中表和共享表，只需运行回归和出图。
 
 **所需数据**
 
-| 研究问题 | 所需现成表 | 来源路径 |
+| 研究问题 | 所需数据文件 | 来源路径 |
 |----------|-----------|---------|
-| Q1 | `q1_regression_ready.csv` | `studies/Q1/` |
+| RQ1 | `authors_with_c3_c5_avg.csv` | `data/interim/` |
 | RQ2 | `paper_level_regression_ready.csv`, `paper_level_first_author_ready.csv` | `data/interim/modify/` |
-| RQ3 | `rq3_regression_ready.csv` | `studies/RQ3/` |
-| RQ4 | `rq4_regression_ready.csv` | `studies/RQ4/` |
-| RQ5 | `rq5_regression_ready.csv` | `studies/RQ5/` |
-| RQ6 | `rq6_analysis_ready.csv` | `studies/RQ6/` |
-
-> 如果 `studies/<RQ>/` 下尚未生成 `*_ready.csv`，但 `data/interim/modify/` 下有现成宽表（如 RQ2），可直接复制或软链接到对应目录，在 notebook 中调整读取路径即可。
+| RQ3 | `atypicality_authorlevel_withCountry.csv` | `data/interim/Q2/` |
+| RQ4 | `atypicality_authorlevel_withCountry.csv` | `data/interim/Q2/` |
+| RQ5 | `retention_authorlevel.csv` | `data/interim/Q2/` |
+| RQ6 | `author_data_usage_stats.csv` + Word2Vec 模型 | `data/interim/Q2/` |
 
 **输出位置**
 
-| RQ | 回归结果 CSV | 图表 PDF |
+| RQ | 回归结果 CSV | 图表 JPG |
 |----|-------------|---------|
-| Q1 | `studies/Q1/results/q1_regression_results.csv` | `studies/Q1/figures/q1_forest_plot.pdf`, `q1_binned_scatter_c3.pdf` |
-| RQ2 | `studies/RQ2/results/rq2_all_author_results.csv`, `rq2_first_author_results.csv` | `studies/RQ2/figures/rq2_forest_all.pdf` |
-| RQ3 | `studies/RQ3/results/rq3_regression_results.csv` | `studies/RQ3/figures/rq3_butterfly.pdf` |
-| RQ4 | `studies/RQ4/results/rq4_regression_results.csv` | `studies/RQ4/figures/rq4_forest_plot.pdf` |
-| RQ5 | `studies/RQ5/results/rq5_cox_results.csv` | `studies/RQ5/figures/rq5_km_curve.pdf` |
-| RQ6 | `studies/RQ6/results/rq6_career_stage_stats.csv` | — |
+| RQ1 | `studies/RQ1/results/rq1_regression_results.csv` | `studies/RQ1/figures/rq1_forest_plot.jpg` |
+| RQ2 | `studies/RQ2/results/rq2_all_author_results.csv`, `rq2_first_author_results.csv` | `studies/RQ2/figures/rq2_forest_all.jpg`, `rq2_forest_first_author.jpg` |
+| RQ3 | `studies/RQ3/results/rq3_regression_results.csv` | `studies/RQ3/figures/rq3_butterfly.jpg` |
+| RQ4 | `studies/RQ4/results/rq4_regression_results.csv` | `studies/RQ4/figures/rq4_gradient_bar.jpg` |
+| RQ5 | `studies/RQ5/results/rq5_cox_results.csv` | `studies/RQ5/figures/rq5_km_curve.jpg` |
+| RQ6 | `studies/RQ6/results/rq6_descriptive_stats.csv` | `studies/RQ6/figures/rq6_descriptive_stats.jpg`, `rq6_umap_projection.jpg` |
 
 回归结果 CSV 包含字段：`label, x_var, coef, std_err, pvalue, ci_lower, ci_upper, r_squared, n_obs, converged`。
 
@@ -98,11 +96,17 @@ Atypicality/
 ```bash
 git clone <repo-url> Atypicality && cd Atypicality
 pip install -r requirements.txt
-# 将现成小表放入上表对应目录
-jupyter notebook studies/Q1/analysis.ipynb   # 依次运行各 RQ
+# 将中表和共享表放入 data/interim/ 对应位置（见上表）
+
+python studies/RQ1/analysis.py
+python studies/RQ2/analysis.py
+python studies/RQ3/analysis.py
+python studies/RQ4/analysis.py
+python studies/RQ5/analysis.py
+python studies/RQ6/analysis.py
 ```
 
-**特点**：跳过所有 `process_data.py`，最快出结果；但小表已固化，无法修改特征工程逻辑。
+**特点**：跳过所有 `process_data.py`，`analysis.py` 直接读取 `data/interim/` 中的现成数据，最快出结果；但无法修改特征工程逻辑。
 
 ---
 

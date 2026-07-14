@@ -116,7 +116,7 @@ def plot_forest_chart(results, title="RQ2: Knowledge & Data Atypicality",
 
     if output_path:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        fig.savefig(output_path, dpi=300, bbox_inches="tight", facecolor="white", pil_kwargs={"quality": 95})
         logger.info(f"Figure saved: {output_path}")
     plt.close(fig)
     return fig
@@ -126,8 +126,9 @@ def main():
     config = load_config(os.path.join(PROJECT_ROOT, "configs", "config.yaml"))
     study_dir = get_study_dir(config)
 
-    all_author_path = os.path.join(study_dir, "rq2_all_author_ready.csv")
-    first_author_path = os.path.join(study_dir, "rq2_first_author_ready.csv")
+    modify_path = config["paths"]["interim_modify"]
+    all_author_path = os.path.join(PROJECT_ROOT, modify_path, "paper_level_regression_ready.csv")
+    first_author_path = os.path.join(PROJECT_ROOT, modify_path, "paper_level_first_author_ready.csv")
 
     if not os.path.exists(all_author_path):
         logger.error(f"Data file not found: {all_author_path}")
@@ -177,14 +178,14 @@ def main():
     plot_forest_chart(
         all_author_results,
         title="RQ2: Knowledge & Data Atypicality (All Authors)",
-        output_path=os.path.join(figures_dir, "rq2_forest_all.pdf"),
+        output_path=os.path.join(figures_dir, "rq2_forest_all.jpg"),
     )
 
     if first_author_results:
         plot_forest_chart(
             first_author_results,
             title="RQ2: Knowledge & Data Atypicality (First Author)",
-            output_path=os.path.join(figures_dir, "rq2_forest_first_author.pdf"),
+            output_path=os.path.join(figures_dir, "rq2_forest_first_author.jpg"),
         )
 
     logger.info("RQ2 analysis complete.")
