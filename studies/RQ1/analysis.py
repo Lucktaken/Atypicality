@@ -4,11 +4,10 @@ import logging
 import pandas as pd
 import numpy as np
 import statsmodels.api as sm
-from statsmodels.discrete.discrete_model import NegativeBinomial
+from sklearn.preprocessing import StandardScaler
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -26,73 +25,111 @@ def get_study_dir(config):
     return os.path.join(PROJECT_ROOT, config["paths"]["studies_output"], "RQ1")
 
 
+def winsorize_data(series, lower_percentile=1, upper_percentile=95):
+    lower_bound = np.percentile(series, lower_percentile)
+    upper_bound = np.percentile(series, upper_percentile)
+    return np.clip(series, lower_bound, upper_bound)
+
+
 def run_rq1_regressions(df):
     x_var = "Atypicality_of_datasets_original_1"
-    controls = ["Average_Team_Size", "Avg_Citation_Without_Self", "Academic_Age", "Topic_Diversity"]
-    controls = [c for c in controls if c in df.columns]
+    features = [
+        "Average_Team_Size",
+        "Average_Institution_Citation",
+        "Academic_Age",
+        "Avg_Citation_Without_Self",
+        x_var,
+        "Topic_Diversity",
+        "average_data_cite",
+        "author_avg_journal_impact",
+        "avg_time_period",
+        "unique_data_count",
+    ]
+    features = [f for f in features if f in df.columns]
 
-    nb_results = {}
+    all_results = {}
     for y_var in ["H_index", "Productivity", "C3", "C5"]:
         if y_var not in df.columns:
             continue
-        features = [x_var] + controls
+
         reg_df = df[[y_var] + features].dropna().copy()
+        logger.info(f"{y_var}: sample size after dropna = {len(reg_df)}")
+
+        reg_df[y_var] = winsorize_data(reg_df[y_var], 1, 95)
+        reg_df[y_var] = np.round(np.maximum(reg_df[y_var], 0)).astype(int)
+
+        zero_prop = (reg_df[y_var] == 0).mean()
+        overdispersion = reg_df[y_var].var() / max(reg_df[y_var].mean(), 1e-6)
+        logger.info(f"{y_var}: zero_prop={zero_prop:.3f}, overdispersion={overdispersion:.2f}")
+
+        for col in ["unique_data_count", "author_avg_journal_impact"]:
+            if col in reg_df.columns:
+                reg_df[col] = np.log1p(reg_df[col])
+
+        scaler = StandardScaler()
+        reg_df[features] = scaler.fit_transform(reg_df[features])
+
         X = sm.add_constant(reg_df[features])
         y = reg_df[y_var]
+
+        best_model = None
+        best_model_name = None
+        best_aic = np.inf
+
         try:
-            model = NegativeBinomial(y, X, log_like_method="nb2").fit(disp=0, maxiter=300)
-            coef = model.params.get(x_var, None)
-            se = model.bse.get(x_var, None)
-            pval = model.pvalues.get(x_var, None)
-            ci = model.conf_int()
-            nb_results[y_var] = {
+            poisson_model = sm.GLM(y, X, family=sm.families.Poisson())
+            poisson_res = poisson_model.fit(cov_type="HC0")
+            if poisson_res.converged and not pd.isna(poisson_res.pvalues).any():
+                if poisson_res.aic < best_aic:
+                    best_aic = poisson_res.aic
+                    best_model = poisson_res
+                    best_model_name = "Poisson"
+                logger.info(f"{y_var} Poisson: AIC={poisson_res.aic:.2f}")
+        except Exception as e:
+            logger.warning(f"{y_var} Poisson failed: {e}")
+
+        try:
+            alpha_val = 1.0
+            if best_model is not None and best_model_name == "Poisson":
+                try:
+                    aux_ols = sm.OLS((y - best_model.mu) ** 2 - y, best_model.mu ** 2).fit()
+                    alpha_est = aux_ols.params.iloc[0]
+                    if alpha_est > 0:
+                        alpha_val = min(alpha_est, 5.0)
+                except Exception:
+                    pass
+
+            glm_nb = sm.GLM(y, X, family=sm.families.NegativeBinomial(alpha=alpha_val))
+            glm_nb_res = glm_nb.fit(cov_type="HC0", maxiter=500)
+            if glm_nb_res.converged and not pd.isna(glm_nb_res.pvalues).any():
+                if glm_nb_res.aic < best_aic:
+                    best_aic = glm_nb_res.aic
+                    best_model = glm_nb_res
+                    best_model_name = "GLM_NB"
+                logger.info(f"{y_var} GLM_NB (alpha={alpha_val:.4f}): AIC={glm_nb_res.aic:.2f}")
+        except Exception as e:
+            logger.warning(f"{y_var} GLM NB failed: {e}")
+
+        if best_model is not None:
+            coef = best_model.params.get(x_var, None)
+            ci = best_model.conf_int()
+            all_results[y_var] = {
                 "converged": True,
                 "x_var": x_var,
+                "model_type": best_model_name,
                 "coef": coef,
-                "std_err": se,
-                "pvalue": pval,
+                "std_err": best_model.bse.get(x_var, None),
+                "pvalue": best_model.pvalues.get(x_var, None),
                 "ci_lower": ci.loc[x_var, 0] if x_var in ci.index else None,
                 "ci_upper": ci.loc[x_var, 1] if x_var in ci.index else None,
-                "r_squared": getattr(model, "pseudo_rsquared", None),
-                "n_obs": int(model.nobs),
+                "aic": best_aic,
+                "n_obs": int(best_model.nobs),
             }
-            if nb_results[y_var]["converged"]:
-                logger.info(f"NB {y_var}: coef={coef:.4f}, p={pval:.6f}")
-        except Exception as e:
-            logger.warning(f"NB regression for {y_var} failed: {e}")
-            nb_results[y_var] = {"converged": False, "error": str(e)}
+            logger.info(f"{y_var} best: {best_model_name}, coef={coef:.4f}, p={best_model.pvalues.get(x_var, 0):.6f}")
+        else:
+            all_results[y_var] = {"converged": False, "error": "All models failed"}
+            logger.warning(f"{y_var}: all models failed")
 
-    ols_results = {}
-    for y_var in ["C3", "C5"]:
-        if y_var not in df.columns:
-            continue
-        features = [x_var] + controls
-        reg_df = df[[y_var] + features].dropna().copy()
-        X = sm.add_constant(reg_df[features])
-        y = reg_df[y_var]
-        try:
-            model = sm.OLS(y, X).fit(cov_type="HC3")
-            coef = model.params.get(x_var, None)
-            se = model.bse.get(x_var, None)
-            pval = model.pvalues.get(x_var, None)
-            ci = model.conf_int()
-            ols_results[y_var + "_OLS"] = {
-                "converged": True,
-                "x_var": x_var,
-                "coef": coef,
-                "std_err": se,
-                "pvalue": pval,
-                "ci_lower": ci.loc[x_var, 0] if x_var in ci.index else None,
-                "ci_upper": ci.loc[x_var, 1] if x_var in ci.index else None,
-                "r_squared": model.rsquared,
-                "n_obs": int(model.nobs),
-            }
-            logger.info(f"OLS {y_var}: coef={coef:.4f}, p={pval:.6f}")
-        except Exception as e:
-            logger.warning(f"OLS regression for {y_var} failed: {e}")
-            ols_results[y_var + "_OLS"] = {"converged": False, "error": str(e)}
-
-    all_results = {**nb_results, **ols_results}
     return all_results
 
 
@@ -111,55 +148,50 @@ def save_results_csv(results, filepath):
 
 
 def plot_forest_chart(results, title="RQ1: Effect of Data Atypicality on Academic Success",
-                      output_path=None):
-    plt.rcParams["font.family"] = "serif"
-    plt.rcParams["font.serif"] = ["Times New Roman", "DejaVu Serif"]
+                      output_path=None, x_limits=(-0.03, 0.13)):
+    plt.rcParams["font.family"] = "sans-serif"
+    plt.rcParams["font.sans-serif"] = ["Times New Roman", "Helvetica", "Arial", "Liberation Sans", "DejaVu Sans"]
     plt.rcParams["axes.unicode_minus"] = False
-    plt.rcParams["axes.linewidth"] = 2.0
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    FS_TITLE = 24
+    FS_LABEL = 20
+    FS_TICKS = 18
+    FS_LEGEND = 18
 
-    y_labels = []
-    y_positions = []
+    fig, ax = plt.subplots(figsize=(10, 6), dpi=300)
+
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
     valid_items = [(label, r) for label, r in results.items() if r.get("converged", False)]
 
-    for i, (label, res) in enumerate(reversed(valid_items)):
+    y_positions = np.linspace(0.8, 0.2, len(valid_items))
+
+    for i, (label, res) in enumerate(valid_items):
         coef = res["coef"]
         ci_lower = res["ci_lower"]
         ci_upper = res["ci_upper"]
-        pval = res.get("pvalue", 1.0)
+        color = colors[i % len(colors)]
 
-        y_pos = i
-        y_positions.append(y_pos)
+        ax.errorbar(coef, y_positions[i],
+                     xerr=[[coef - ci_lower], [ci_upper - coef]],
+                     fmt="o", color=color, capsize=8,
+                     elinewidth=2.5, markeredgewidth=2,
+                     markersize=8, label=label)
 
-        display_label = label.replace("_OLS", " (OLS)").replace("_", " ")
-        y_labels.append(display_label)
+    ax.axvline(x=0, color="#d62728", linestyle="--", linewidth=2, alpha=0.6)
 
-        color = "#2166ac" if pval < 0.05 else "#cccccc"
-        alpha = 1.0 if pval < 0.05 else 0.5
+    ax.tick_params(axis="x", labelsize=FS_TICKS)
+    ax.set_xlim(x_limits)
+    ax.set_yticks([])
+    ax.spines["left"].set_visible(False)
+    ax.set_ylim(0, 1)
+    ax.set_xlabel("Coefficient", fontsize=FS_LABEL, labelpad=15)
 
-        ax.errorbar(coef, y_pos, xerr=[[coef - ci_lower], [ci_upper - coef]],
-                     fmt="o", color=color, alpha=alpha, capsize=4, markersize=8,
-                     ecolor="#333333", elinewidth=1.5)
-
-        sig_str = "***" if pval < 0.001 else ("**" if pval < 0.01 else ("*" if pval < 0.05 else ""))
-        text = f"{coef:.4f}{sig_str}" if pval < 0.05 else f"{coef:.4f} (n.s.)"
-        x_text = ci_upper + 0.005 if coef >= 0 else ci_lower - 0.005
-        ha = "left" if coef >= 0 else "right"
-        ax.text(x_text, y_pos, text, va="center", ha=ha, fontsize=11,
-                bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8))
-
-    ax.axvline(x=0, color="black", linestyle="--", linewidth=1.0)
-    ax.set_yticks(y_positions)
-    ax.set_yticklabels(y_labels, fontsize=13)
-    ax.set_xlabel("Coefficient (95% CI)", fontsize=14)
-    ax.set_title(title, fontsize=16, pad=15)
+    ax.legend(title="Success Metrics", title_fontsize=FS_LEGEND,
+              fontsize=FS_LEGEND, loc="center right", bbox_to_anchor=(0.98, 0.5),
+              frameon=False)
+    ax.grid(axis="x", linestyle=":", alpha=0.4)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-
-    sig_patch = mpatches.Patch(facecolor="#2166ac", alpha=0.85, edgecolor="black", label="Significant (p ≤ 0.05)")
-    ns_patch = mpatches.Patch(facecolor="#cccccc", alpha=0.5, edgecolor="black", label="Non-significant")
-    ax.legend(handles=[sig_patch, ns_patch], loc="lower right", fontsize=11, frameon=False)
 
     plt.tight_layout()
 

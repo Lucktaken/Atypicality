@@ -26,6 +26,22 @@
 | **RQ5** | 非典型性与学术生涯留存 | Academic Retention | Atypicality | Cox PH + KM |
 | **RQ6** | 数据使用模式的 Embedding 分析 | — (描述性) | — | Word2Vec + 聚类 |
 
+## 样例结果
+
+以下为各研究问题的代表性图表（完整结果见 `studies/<RQ>/figures/`）。
+
+| RQ1: 数据非典型性对学术成功的影响 | RQ2: 知识与数据双重跨界（一作） |
+|:---:|:---:|
+| ![RQ1](data/figures/rq1_forest_plot.jpg) | ![RQ2](data/figures/rq2_forest_first_author.jpg) |
+
+| RQ3: 地理/发展水平调节效应 | RQ4: 非典型性的决定因素 |
+|:---:|:---:|
+| ![RQ3](data/figures/rq3_butterfly.jpg) | ![RQ4](data/figures/rq4_gradient_bar.jpg) |
+
+| RQ5: 非典型性与学术生涯留存 | RQ6: 数据使用模式描述性统计 |
+|:---:|:---:|
+| ![RQ5](data/figures/rq5_km_curve.jpg) | ![RQ6](data/figures/rq6_descriptive_stats.jpg) |
+
 ## 目录结构
 
 ```
