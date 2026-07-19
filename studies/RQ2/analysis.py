@@ -1,5 +1,6 @@
 import os
 import sys
+import argparse
 import logging
 import pandas as pd
 import numpy as np
@@ -15,7 +16,7 @@ warnings.filterwarnings("ignore")
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, PROJECT_ROOT)
 
-from src.data_loader import load_config
+from src.data_loader import load_config, resolve_input_path, check_file_exists
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -123,19 +124,35 @@ def plot_forest_chart(results, title="RQ2: Knowledge & Data Atypicality",
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="RQ2: 知识与数据的双重跨界 (Paper-Level)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  python studies/RQ2/analysis.py                # 方案 A (默认)
+  python studies/RQ2/analysis.py --plan A        # 方案 A (显式)
+  python studies/RQ2/analysis.py --plan B        # 方案 B (需先运行 process_data.py)
+        """)
+    parser.add_argument("--plan", choices=["A", "B"], default="A",
+                        help="方案选择: A=从 data/interim/ 读取, B=从 studies/RQ2/ 读取 (需先运行 process_data.py)")
+    args = parser.parse_args()
+
     config = load_config(os.path.join(PROJECT_ROOT, "configs", "config.yaml"))
     study_dir = get_study_dir(config)
 
-    modify_path = config["paths"]["interim_modify"]
-    all_author_path = os.path.join(PROJECT_ROOT, modify_path, "paper_level_regression_ready.csv")
-    first_author_path = os.path.join(PROJECT_ROOT, modify_path, "paper_level_first_author_ready.csv")
-
-    if not os.path.exists(all_author_path):
-        logger.error(f"Data file not found: {all_author_path}")
-        sys.exit(1)
+    if args.plan == "B":
+        all_author_path = resolve_input_path(config, "RQ2", "B", "rq2_all_author_ready.csv")
+        first_author_path = resolve_input_path(config, "RQ2", "B", "rq2_first_author_ready.csv")
+        if not check_file_exists(all_author_path, "请先运行: python studies/RQ2/process_data.py"):
+            sys.exit(1)
+    else:
+        all_author_path = os.path.join(PROJECT_ROOT, config["paths"]["interim_paper_level_regression_ready"])
+        first_author_path = os.path.join(PROJECT_ROOT, config["paths"]["interim_paper_level_first_author_ready"])
+        if not check_file_exists(all_author_path):
+            sys.exit(1)
 
     df_all = pd.read_csv(all_author_path)
-    logger.info(f"Loaded RQ2 all-author data: {df_all.shape}")
+    logger.info(f"Loaded RQ2 all-author data (Plan {args.plan}): {df_all.shape}")
 
     df_first = None
     if os.path.exists(first_author_path):

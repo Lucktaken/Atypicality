@@ -1,5 +1,6 @@
 import os
 import sys
+import argparse
 import logging
 import pandas as pd
 import numpy as np
@@ -16,7 +17,7 @@ warnings.filterwarnings("ignore")
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, PROJECT_ROOT)
 
-from src.data_loader import load_config
+from src.data_loader import load_config, resolve_input_path, check_file_exists
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -30,9 +31,9 @@ def winsorize_series(s, limits=(0.01, 0.99)):
     return s.clip(lower=s.quantile(limits[0]), upper=s.quantile(limits[1]))
 
 
-def prepare_rq3_data(config):
-    q2_path = config["paths"]["interim_q2"]
-    csv_path = os.path.join(PROJECT_ROOT, q2_path, "atypicality_authorlevel_withCountry.csv")
+def prepare_rq3_data(config, csv_path=None):
+    if csv_path is None:
+        csv_path = os.path.join(PROJECT_ROOT, config["paths"]["interim_atypicality_authorlevel_withCountry"])
     if not os.path.exists(csv_path):
         logger.error(f"Data file not found: {csv_path}")
         sys.exit(1)
@@ -253,10 +254,30 @@ def save_results_csv(plot_df, filepath):
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="RQ3: 地理/发展水平调节效应",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  python studies/RQ3/analysis.py                # 方案 A (默认)
+  python studies/RQ3/analysis.py --plan A        # 方案 A (显式)
+  python studies/RQ3/analysis.py --plan B        # 方案 B (需先运行 process_data.py)
+        """)
+    parser.add_argument("--plan", choices=["A", "B"], default="A",
+                        help="方案选择: A=从 data/interim/ 读取, B=从 studies/RQ3/ 读取 (需先运行 process_data.py)")
+    args = parser.parse_args()
+
     config = load_config(os.path.join(PROJECT_ROOT, "configs", "config.yaml"))
     study_dir = get_study_dir(config)
 
-    df = prepare_rq3_data(config)
+    if args.plan == "B":
+        csv_path = resolve_input_path(config, "RQ3", "B", "rq3_regression_ready.csv")
+        if not check_file_exists(csv_path, "请先运行: python studies/RQ3/process_data.py"):
+            sys.exit(1)
+    else:
+        csv_path = None
+
+    df = prepare_rq3_data(config, csv_path=csv_path)
 
     results = run_rq3_regressions(df)
 

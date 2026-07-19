@@ -1,5 +1,6 @@
 import os
 import sys
+import argparse
 import logging
 import pandas as pd
 import numpy as np
@@ -16,7 +17,7 @@ warnings.filterwarnings("ignore")
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, PROJECT_ROOT)
 
-from src.data_loader import load_config
+from src.data_loader import load_config, resolve_input_path, check_file_exists
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -26,21 +27,21 @@ def get_study_dir(config):
     return os.path.join(PROJECT_ROOT, config["paths"]["studies_output"], "RQ6")
 
 
-def compute_author_stats(config):
-    q2_path = config["paths"]["interim_q2"]
-    output_path = os.path.join(PROJECT_ROOT, q2_path, "author_data_usage_stats.csv")
+def compute_author_stats(config, csv_path=None):
+    output_path = os.path.join(PROJECT_ROOT, config["paths"]["interim_author_data_usage_stats"])
 
     if os.path.exists(output_path):
         logger.info(f"author_data_usage_stats.csv already exists, loading from {output_path}")
         return pd.read_csv(output_path)
 
     logger.info("Computing author data usage stats from scratch...")
-    author_csv = os.path.join(PROJECT_ROOT, q2_path, "atypicality_authorlevel_withCountry.csv")
-    if not os.path.exists(author_csv):
-        logger.error(f"Data file not found: {author_csv}")
+    if csv_path is None:
+        csv_path = os.path.join(PROJECT_ROOT, config["paths"]["interim_atypicality_authorlevel_withCountry"])
+    if not os.path.exists(csv_path):
+        logger.error(f"Data file not found: {csv_path}")
         sys.exit(1)
 
-    df_author = pd.read_csv(author_csv)
+    df_author = pd.read_csv(csv_path)
     if isinstance(df_author["match_dois"].iloc[0], str):
         df_author["match_dois"] = df_author["match_dois"].apply(ast.literal_eval)
 
@@ -57,9 +58,8 @@ def compute_author_stats(config):
     return author_stats
 
 
-def run_word2vec_umap(config):
-    q2_path = config["paths"]["interim_q2"]
-    model_path = os.path.join(PROJECT_ROOT, q2_path, "dataset_word2vec.model")
+def run_word2vec_umap(config, csv_path=None):
+    model_path = os.path.join(PROJECT_ROOT, config["paths"]["interim_data"], "dataset_word2vec.model")
 
     if os.path.exists(model_path):
         from gensim.models import Word2Vec
@@ -74,12 +74,13 @@ def run_word2vec_umap(config):
         logger.error("gensim not installed. Install with: pip install gensim")
         sys.exit(1)
 
-    author_csv = os.path.join(PROJECT_ROOT, q2_path, "atypicality_authorlevel_withCountry.csv")
-    if not os.path.exists(author_csv):
-        logger.error(f"Data file not found: {author_csv}")
+    if csv_path is None:
+        csv_path = os.path.join(PROJECT_ROOT, config["paths"]["interim_atypicality_authorlevel_withCountry"])
+    if not os.path.exists(csv_path):
+        logger.error(f"Data file not found: {csv_path}")
         sys.exit(1)
 
-    df_author = pd.read_csv(author_csv)
+    df_author = pd.read_csv(csv_path)
     if isinstance(df_author["match_dois"].iloc[0], str):
         df_author["match_dois"] = df_author["match_dois"].apply(ast.literal_eval)
 
@@ -189,10 +190,30 @@ def save_results_csv(df, filepath):
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="RQ6: 数据使用模式的 Embedding 分析",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  python studies/RQ6/analysis.py                # 方案 A (默认)
+  python studies/RQ6/analysis.py --plan A        # 方案 A (显式)
+  python studies/RQ6/analysis.py --plan B        # 方案 B (需先运行 process_data.py)
+        """)
+    parser.add_argument("--plan", choices=["A", "B"], default="A",
+                        help="方案选择: A=从 data/interim/ 读取, B=从 studies/RQ6/ 读取 (需先运行 process_data.py)")
+    args = parser.parse_args()
+
     config = load_config(os.path.join(PROJECT_ROOT, "configs", "config.yaml"))
     study_dir = get_study_dir(config)
 
-    author_stats = compute_author_stats(config)
+    if args.plan == "B":
+        csv_path = resolve_input_path(config, "RQ6", "B", "rq6_analysis_ready.csv")
+        if not check_file_exists(csv_path, "请先运行: python studies/RQ6/process_data.py"):
+            sys.exit(1)
+    else:
+        csv_path = None
+
+    author_stats = compute_author_stats(config, csv_path=csv_path)
 
     df_rq6 = author_stats.copy()
     logger.info(f"RQ6 data: {df_rq6.shape}")
@@ -205,7 +226,7 @@ def main():
 
     plot_descriptive_stats(author_stats, df_rq6, output_dir=figures_dir)
 
-    w2v_model = run_word2vec_umap(config)
+    w2v_model = run_word2vec_umap(config, csv_path=csv_path)
     if w2v_model is not None:
         plot_umap_projection(
             w2v_model,

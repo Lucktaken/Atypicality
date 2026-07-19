@@ -1,5 +1,6 @@
 import os
 import sys
+import argparse
 import logging
 import pandas as pd
 import numpy as np
@@ -14,7 +15,7 @@ warnings.filterwarnings("ignore")
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, PROJECT_ROOT)
 
-from src.data_loader import load_config
+from src.data_loader import load_config, resolve_input_path, check_file_exists
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -24,9 +25,9 @@ def get_study_dir(config):
     return os.path.join(PROJECT_ROOT, config["paths"]["studies_output"], "RQ5")
 
 
-def prepare_rq5_data(config):
-    q2_path = config["paths"]["interim_q2"]
-    csv_path = os.path.join(PROJECT_ROOT, q2_path, "retention_authorlevel.csv")
+def prepare_rq5_data(config, csv_path=None):
+    if csv_path is None:
+        csv_path = os.path.join(PROJECT_ROOT, config["paths"]["interim_retention_authorlevel"])
     if not os.path.exists(csv_path):
         logger.error(f"Data file not found: {csv_path}")
         sys.exit(1)
@@ -166,10 +167,30 @@ def save_results_csv(results_df, filepath):
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="RQ5: 非典型性与学术生涯留存",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  python studies/RQ5/analysis.py                # 方案 A (默认)
+  python studies/RQ5/analysis.py --plan A        # 方案 A (显式)
+  python studies/RQ5/analysis.py --plan B        # 方案 B (需先运行 process_data.py)
+        """)
+    parser.add_argument("--plan", choices=["A", "B"], default="A",
+                        help="方案选择: A=从 data/interim/ 读取, B=从 studies/RQ5/ 读取 (需先运行 process_data.py)")
+    args = parser.parse_args()
+
     config = load_config(os.path.join(PROJECT_ROOT, "configs", "config.yaml"))
     study_dir = get_study_dir(config)
 
-    df_clean = prepare_rq5_data(config)
+    if args.plan == "B":
+        csv_path = resolve_input_path(config, "RQ5", "B", "rq5_regression_ready.csv")
+        if not check_file_exists(csv_path, "请先运行: python studies/RQ5/process_data.py"):
+            sys.exit(1)
+    else:
+        csv_path = None
+
+    df_clean = prepare_rq5_data(config, csv_path=csv_path)
 
     cph_main, cph_hemi, cph_dev, df_model = run_cox_models(df_clean)
 

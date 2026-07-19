@@ -1,5 +1,6 @@
 import os
 import sys
+import argparse
 import logging
 import pandas as pd
 import numpy as np
@@ -15,7 +16,7 @@ warnings.filterwarnings("ignore")
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, PROJECT_ROOT)
 
-from src.data_loader import load_config
+from src.data_loader import load_config, resolve_input_path, check_file_exists
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -204,16 +205,33 @@ def plot_forest_chart(results, title="RQ1: Effect of Data Atypicality on Academi
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="RQ1: 数据使用非典型性对学术成功的影响",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  python studies/RQ1/analysis.py                # 方案 A (默认)
+  python studies/RQ1/analysis.py --plan A        # 方案 A (显式)
+  python studies/RQ1/analysis.py --plan B        # 方案 B (需先运行 process_data.py)
+        """)
+    parser.add_argument("--plan", choices=["A", "B"], default="A",
+                        help="方案选择: A=从 data/interim/ 读取, B=从 studies/RQ1/ 读取 (需先运行 process_data.py)")
+    args = parser.parse_args()
+
     config = load_config(os.path.join(PROJECT_ROOT, "configs", "config.yaml"))
     study_dir = get_study_dir(config)
 
-    data_path = os.path.join(PROJECT_ROOT, config["paths"]["interim_core_table"])
-    if not os.path.exists(data_path):
-        logger.error(f"Data file not found: {data_path}")
-        sys.exit(1)
+    if args.plan == "B":
+        data_path = resolve_input_path(config, "RQ1", "B", "rq1_regression_ready.csv")
+        if not check_file_exists(data_path, "请先运行: python studies/RQ1/process_data.py"):
+            sys.exit(1)
+    else:
+        data_path = os.path.join(PROJECT_ROOT, config["paths"]["interim_core_table"])
+        if not check_file_exists(data_path):
+            sys.exit(1)
 
     df = pd.read_csv(data_path)
-    logger.info(f"Loaded RQ1 data: {df.shape}")
+    logger.info(f"Loaded RQ1 data (Plan {args.plan}): {df.shape}")
 
     results = run_rq1_regressions(df)
 

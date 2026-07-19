@@ -114,12 +114,16 @@ git clone <repo-url> Atypicality && cd Atypicality
 pip install -r requirements.txt
 # 将中表和共享表放入 data/interim/ 对应位置（见上表）
 
+# 默认方案 A（从 data/interim/ 直接读取）
 python studies/RQ1/analysis.py
 python studies/RQ2/analysis.py
 python studies/RQ3/analysis.py
 python studies/RQ4/analysis.py
 python studies/RQ5/analysis.py
 python studies/RQ6/analysis.py
+
+# 或显式指定方案 A
+python studies/RQ1/analysis.py --plan A
 ```
 
 **特点**：跳过所有 `process_data.py`，`analysis.py` 直接读取 `data/interim/` 中的现成数据，最快出结果；但无法修改特征工程逻辑。
@@ -130,17 +134,27 @@ python studies/RQ6/analysis.py
 
 > **适用场景**：希望修改特征工程逻辑（增减控制变量、调整缩尾/标准化参数），或需从头生成小表。
 
+**两步流程**
+
+```
+process_data.py（派生层）          analysis.py --plan B（分析层）
+  核心中表 ──→ 回归宽表      ──→    回归结果 + 图表
+  (data/interim/)   (studies/<RQ>/)       (studies/<RQ>/results/ + figures/)
+```
+
 **所需数据**
 
 | 文件 | 目标路径 | 被哪些 RQ 使用 | 大小 |
 |------|---------|---------------|------|
 | `authors_with_c3_c5_avg.csv` | `data/interim/` | Q1, RQ2, RQ3, RQ6 | ~400M |
 | `authors_info.csv` | `data/interim/` | RQ6 | ~200M |
-| `paper_level_data_atypicality.csv` | `data/interim/` | RQ2 | ~50M |
+| `paper_level_data_atypicality.csv` | `data/interim/` | RQ2 | ~90M |
 | `papers_with_embeddings.csv` | `data/interim/` | RQ2（备用） | ~100M |
+| `paper_level_regression_ready.csv` | `data/interim/modify/` | RQ2（引用指标来源） | ~100M |
+| `paper_level_first_author_ready.csv` | `data/interim/modify/` | RQ2（第一作者筛选） | ~100M |
 | `atypicality_authorlevel_withCountry.csv` | `data/interim/Q2/` | RQ3, RQ4 | ~80M |
 | `geographic_authorlevel_middle.csv` | `data/interim/Q2/` | RQ3 | ~30M |
-| `topic_dataset_paperlevel_merged.csv` | `data/interim/Q2/` | RQ2 | ~60M |
+| `topic_dataset_paperlevel_merged.csv` | `data/interim/Q2/` | RQ2 | ~160M |
 | `retention_authorlevel.csv` | `data/interim/Q2/` | RQ5 | ~40M |
 | `author_data_usage_stats.csv` | `data/interim/Q2/` | RQ6 | ~20M |
 | `dataset_word2vec.model` + `.npy` | `data/interim/Q2/` | RQ6 | ~模型文件 |
@@ -148,7 +162,7 @@ python studies/RQ6/analysis.py
 **按需最小子集**
 
 - **仅 Q1**：核心中表
-- **仅 RQ2**：核心中表 + `paper_level_data_atypicality.csv` + `topic_dataset_paperlevel_merged.csv`
+- **仅 RQ2**：核心中表 + `paper_level_data_atypicality.csv` + `topic_dataset_paperlevel_merged.csv` + `paper_level_regression_ready.csv` + `paper_level_first_author_ready.csv`
 - **仅 RQ3**：核心中表 + `geographic_authorlevel_middle.csv` + `atypicality_authorlevel_withCountry.csv`
 - **仅 RQ4**：`atypicality_authorlevel_withCountry.csv`
 - **仅 RQ5**：`retention_authorlevel.csv`
@@ -161,17 +175,37 @@ git clone <repo-url> Atypicality && cd Atypicality
 pip install -r requirements.txt
 # 将中表和共享表放入 data/interim/ 对应位置（见上表）
 
-# 派生层：生成各 RQ 回归宽表
-python studies/Q1/process_data.py    # → studies/Q1/q1_regression_ready.csv
-python studies/RQ2/process_data.py   # → studies/RQ2/rq2_all_author_ready.csv
-python studies/RQ3/process_data.py   # → studies/RQ3/rq3_regression_ready.csv
-python studies/RQ4/process_data.py   # → studies/RQ4/rq4_regression_ready.csv
-python studies/RQ5/process_data.py   # → studies/RQ5/rq5_regression_ready.csv
-python studies/RQ6/process_data.py   # → studies/RQ6/rq6_analysis_ready.csv
+# 第一步：生成各 RQ 回归宽表（可修改 process_data.py 中的特征工程逻辑）
+python studies/RQ1/process_data.py    # → studies/RQ1/rq1_regression_ready.csv
+python studies/RQ2/process_data.py    # → studies/RQ2/rq2_all_author_ready.csv
+python studies/RQ3/process_data.py    # → studies/RQ3/rq3_regression_ready.csv
+python studies/RQ4/process_data.py    # → studies/RQ4/rq4_regression_ready.csv
+python studies/RQ5/process_data.py    # → studies/RQ5/rq5_regression_ready.csv
+python studies/RQ6/process_data.py    # → studies/RQ6/rq6_analysis_ready.csv
 
-# 分析层：回归 + 可视化
-jupyter notebook studies/Q1/analysis.ipynb   # 依次运行各 RQ
+# 第二步：使用方案 B 运行分析（从 studies/<RQ>/ 读取）
+python studies/RQ1/analysis.py --plan B
+python studies/RQ2/analysis.py --plan B
+python studies/RQ3/analysis.py --plan B
+python studies/RQ4/analysis.py --plan B
+python studies/RQ5/analysis.py --plan B
+python studies/RQ6/analysis.py --plan B
 ```
+
+**`--plan` 参数说明**
+
+所有 `analysis.py` 均支持 `--plan {A,B}` 参数：
+
+| 参数 | 行为 | 数据来源 |
+|------|------|----------|
+| `--plan A`（默认） | 从 `data/interim/` 直接读取现成数据 | 各 RQ 的中间表 |
+| `--plan B` | 从 `studies/<RQ>/` 读取 process_data 输出 | `process_data.py` 生成的小表 |
+
+错误检测：
+- 选择 `--plan B` 但对应文件不存在时，会提示"请先运行 `process_data.py`"
+- 输入 `--plan C` 等无效值时，argparse 自动拦截
+
+> **注意**：RQ2 的 `process_data.py` 需合并多个大文件（总计 ~500MB+），在内存 < 4GB 的环境中可能因 OOM 失败。建议在内存充足的机器上运行，或将大文件拆分为 chunk 加载。
 
 **特点**：可自由修改 `process_data.py` 中的控制变量、缩尾阈值、标准化方式，重新运行即更新小表；需更多磁盘空间。
 
@@ -181,6 +215,7 @@ jupyter notebook studies/Q1/analysis.ipynb   # 依次运行各 RQ
 
 | | 方案 A（只回归） | 方案 B（中表→小表→回归） |
 |---|---|---|
+| **命令示例** | `python studies/RQ1/analysis.py` | `python studies/RQ1/process_data.py && python studies/RQ1/analysis.py --plan B` |
 | **所需数据** | 各 RQ 现成小表 | 核心中表 + Q2 共享表 |
 | **磁盘占用** | ~几十 MB | ~1 GB+ |
 | **可定制性** | 无法修改特征工程 | 可自由调整 |

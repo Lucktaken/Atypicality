@@ -10,14 +10,17 @@ paths:
   raw_sciscinet: "data/raw/sciscinet/"
   raw_datacite: "data/raw/datacite/"
 
-  # 中表与派生数据路径
+  # 中表与派生数据路径（统一扁平化到 data/interim/）
   interim_data: "data/interim/"
   interim_authors_info: "data/interim/authors_info.csv"
   interim_core_table: "data/interim/authors_with_c3_c5_avg.csv"
   interim_paper_atypicality: "data/interim/paper_level_data_atypicality.csv"
   interim_embeddings: "data/interim/papers_with_embeddings.csv"
-  interim_q2: "data/interim/Q2/"
-  interim_modify: "data/interim/modify/"
+  interim_paper_level_regression_ready: "data/interim/paper_level_regression_ready.csv"
+  interim_paper_level_first_author_ready: "data/interim/paper_level_first_author_ready.csv"
+  interim_atypicality_authorlevel_withCountry: "data/interim/atypicality_authorlevel_withCountry.csv"
+  interim_author_data_usage_stats: "data/interim/author_data_usage_stats.csv"
+  interim_retention_authorlevel: "data/interim/retention_authorlevel.csv"
 
   # 研究问题输出根路径
   studies_output: "studies/"
