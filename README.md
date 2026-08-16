@@ -2,222 +2,294 @@
 
 ## 项目概述
 
-本项目研究数据使用的非典型性（Atypicality）如何影响学术成功，涵盖多个研究问题（Q1, RQ2-RQ6）。项目采用**三层架构**管理数据流转，确保大文件隔离、研究问题解耦、结果可复现。
+本项目研究数据使用的非典型性（Atypicality）如何影响学术成功，涵盖多个研究问题（RQ1-RQ6）。项目采用**分层架构**管理数据流转，确保大文件隔离、研究问题解耦、结果可复现。
 
 ## 数据流转架构
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│  基础层：100G+ 原始数据 (SciSciNet + DataCite)                        │
-│  ──→ BigDataProcessor (Step 1-2) ──→ authors_info.csv                │
-│  ──→ EmbeddingGenerator (Step 3) ──→ papers_with_embeddings.csv      │
-│  ──→ FeatureEngineer (Step 4) ──→ 核心中表 authors_with_c3_c5_avg.csv│
-│       (~400M, 存放于 data/interim/, 不进 Git)                        │
-├──────────────────────────────────────────────────────────────────────┤
-│  派生层：每个研究问题独立                                             │
-│  ──→ process_data.py 从中表 + Q2共享表 计算特征 ──→ 小表             │
-├──────────────────────────────────────────────────────────────────────┤
-│  分析层：每个研究问题独立                                             │
-│  ──→ analysis.ipynb 读取小表，回归建模 + 可视化                       │
-└──────────────────────────────────────────────────────────────────────┘
+基础层（原始数据 → 基础表，需 100G+ SciSciNet / DataCite，本文档不涉及）
+────────────────────────────────────────────────────────────
+派生层  基础表 + Q2 共享表  ──→  process_data.py  ──→  小表（ready 表 / 回归宽表）
+分析层  小表  ──→  analysis.py  ──→  回归结果 + 图表
 ```
+
+术语约定：
+
+- **中表（核心中表）**：只有 `authors_with_c3_c5_avg.csv` 一张（作者级 26 列宽表），存放在 `data/interim/`，是派生层和分析层共用的起点。
+- **基础表**（step1-4 产出，本地已有）：`authors_info.csv`、`papers_with_embeddings.csv`、`paper_level_data_atypicality.csv`，加上核心中表。
+- **Q2 共享表**（上游已有）：`topic_dataset_paperlevel_merged.csv`、`geographic_authorlevel_middle.csv` 等，存放在 `data/interim/Q2/`。
+- **小表（ready 表）**：由 `process_data.py` **动态生成**，即各 RQ 的 `analysis.py --plan A` 直接读取的那些文件，同时写出 `studies/<RQ>/` 下的 `*_ready.csv` 供 `--plan B` 使用。
 
 ## 研究问题总览
 
 | RQ | 研究问题 | 因变量 | 核心自变量 | 模型 |
 |----|----------|--------|------------|------|
-| **Q1** | 数据使用非典型性对学术成功的影响 | H_index, Productivity, C3, C5 | Atypicality | NB / OLS / GLM |
+| **RQ1** | 数据使用非典型性对学术成功的影响 | H_index, Productivity, C3, C5 | Atypicality | NB / OLS / GLM |
 | **RQ2** | 知识与数据的双重跨界（Paper-Level） | C3, C5 | topic_distance, dataset_distance | OLS + NB |
 | **RQ3** | 地理/发展水平调节效应 | Atypicality | H_index 等 | 分组 OLS + NB |
 | **RQ4** | 数据使用非典型性的决定因素 | Atypicality | H_index, Academic_Age 等 | OLS |
 | **RQ5** | 非典型性与学术生涯留存 | Academic Retention | Atypicality | Cox PH + KM |
-| **RQ6** | 数据使用模式的 Embedding 分析 | — (描述性) | — | Word2Vec + 聚类 |
+| **RQ6** | 数据使用模式的 Embedding 分析 | — (描述性) | — | 描述统计 + Word2Vec/UMAP |
+
+## 样例结果
+
+以下为各研究问题的代表性图表（完整结果见 `studies/<RQ>/figures/`）。
+
+| RQ1: 数据非典型性对学术成功的影响 | RQ2: 知识与数据双重跨界（一作） |
+|:---:|:---:|
+| ![RQ1](data/figures/rq1_forest_plot.jpg) | ![RQ2](data/figures/rq2_forest_first_author.jpg) |
+
+| RQ3: 地理/发展水平调节效应 | RQ4: 非典型性的决定因素 |
+|:---:|:---:|
+| ![RQ3](data/figures/rq3_butterfly.jpg) | ![RQ4](data/figures/rq4_gradient_bar.jpg) |
+
+| RQ5: 非典型性与学术生涯留存 | RQ6: 数据使用模式描述性统计 |
+|:---:|:---:|
+| ![RQ5](data/figures/rq5_km_curve.jpg) | ![RQ6](data/figures/rq6_descriptive_stats.jpg) |
 
 ## 目录结构
 
 ```
 Atypicality/
-├── .gitignore
-├── README.md
+├── configs/config.yaml              # 路径与参数统一配置
 ├── requirements.txt
-├── configs/
-│   └── config.yaml
 ├── data/
-│   ├── raw/
-│   │   ├── sciscinet/           # SciSciNet TSV 原始数据（NAS 挂载）
-│   │   └── datacite/            # DataCite CSV 原始数据（NAS 挂载）
-│   └── interim/
-│       ├── authors_info.csv                  # Step 1-2 产出
-│       ├── authors_with_c3_c5_avg.csv        # 核心中表（Step 4 产出）
-│       ├── paper_level_data_atypicality.csv  # Paper-level atypicality
-│       ├── papers_with_embeddings.csv        # Step 3 产出
-│       ├── Q2/                               # RQ 系列共享的派生小表
-│       │   ├── atypicality_authorlevel_withCountry.csv
-│       │   ├── geographic_authorlevel_middle.csv
-│       │   ├── retention_authorlevel.csv
-│       │   ├── topic_dataset_paperlevel_merged.csv
-│       │   ├── author_data_usage_stats.csv
-│       │   └── dataset_word2vec.model*
-│       └── modify/                           # RQ2 回归宽表
-│           ├── paper_level_regression_ready.csv
-│           ├── paper_level_first_author_ready.csv
-│           └── ...
-├── src/
-│   ├── __init__.py
-│   ├── data_loader.py          # 统一数据读取（替代 Colab mount+read）
-│   ├── big_data_processor.py   # Step 1-2: 原始数据 → authors_info
-│   ├── feature_engineer.py     # Step 4: authors_info → 核心中表
-│   ├── embedding.py            # Step 3: OpenAlex API + Sentence Transformer
-│   ├── regression.py           # 通用回归工具（NB, OLS, GLM, Cox PH）
-│   └── visualization.py        # 通用可视化（forest, butterfly, KM 等）
+│   ├── raw/                         # 原始数据（NAS 挂载，不进 Git）
+│   └── interim/                     # 基础表 + 共享表 + ready 表（不进 Git）
+│       ├── authors_with_c3_c5_avg.csv    # 核心中表（唯一一张中表）
+│       ├── authors_info.csv              # 基础表
+│       ├── papers_with_embeddings.csv    # 基础表（含 Title/Embeddings/C3/C5）
+│       ├── paper_level_data_atypicality.csv   # 基础表
+│       ├── paper_level_regression_ready.csv   # RQ2 ready 表（process_data 生成）
+│       ├── paper_level_first_author_ready.csv # RQ2 ready 表（一作，暂未生成）
+│       ├── atypicality_authorlevel_withCountry.csv  # RQ3/RQ4 ready 表
+│       ├── retention_authorlevel.csv   # RQ5 ready 表
+│       ├── author_data_usage_stats.csv  # RQ6 ready 表
+│       ├── Q2/                      # Q2 共享表（topic_dataset_paperlevel_merged 等）
+│       └── modify/                  # 历史中间产物（现流程不再读取）
+├── src/                             # 公共模块
+│   ├── data_loader.py               # 统一数据读取
+│   ├── q2_builders.py               # RQ 共享 builder（国家信息 + 留存特征）
+│   ├── big_data_processor.py        # Step 1-2: 原始数据 → authors_info
+│   ├── feature_engineer.py          # Step 4: authors_info → 核心中表
+│   ├── embedding.py                 # Step 3: OpenAlex API + Sentence Transformer
+│   ├── regression.py                # 通用回归（NB, OLS, GLM, Cox PH）
+│   └── visualization.py             # 通用可视化（forest, butterfly, KM 等）
 ├── scripts/
-│   ├── build_interim_table.py  # 执行 Step 1-4 完整流程
-│   └── validate_data.py        # 数据验证与统计摘要
-└── studies/
-    ├── Q1/
-    │   ├── process_data.py
-    │   └── analysis.ipynb
-    ├── RQ2/
-    │   ├── process_data.py
-    │   └── analysis.ipynb
-    ├── RQ3/
-    │   ├── process_data.py
-    │   └── analysis.ipynb
-    ├── RQ4/
-    │   ├── process_data.py
-    │   └── analysis.ipynb
-    ├── RQ5/
-    │   ├── process_data.py
-    │   └── analysis.ipynb
-    └── RQ6/
-        ├── process_data.py
-        └── analysis.ipynb
+│   ├── build_interim_table.py       # Step 1-4 完整流程
+│   └── validate_data.py             # 数据验证与统计摘要
+└── studies/                         # 各研究问题独立目录
+    └── <RQ>/
+        ├── process_data.py          # 基础表/Q2 共享表 → ready 表
+        ├── analysis.py              # ready 表 → 回归 + 图表
+        ├── results/                 # 回归结果 CSV（自动生成）
+        └── figures/                 # 图表 JPG（自动生成）
 ```
 
-## 快速开始
+## 复现方案
 
-### 1. Clone 仓库
+提供两种复现路径，均**不需要从 SciSciNet / DataCite 原始数据（100G+）开始**。两种方案产出的 ready 表是同一份数据。
+
+### 方案 A：只回归（直接读现成 ready 表运行分析）
+
+> **适用场景**：`data/interim/` 下的 ready 表已经由 `process_data.py` 生成好（或从别处拷贝），只需运行回归和出图。
+
+**所需数据**（均由方案 B 的 `process_data.py` 生成，来源路径以 `configs/config.yaml` 为准）
+
+| 研究问题 | 所需数据文件 | 来源路径 |
+|----------|-----------|---------|
+| RQ1 | `authors_with_c3_c5_avg.csv`（核心中表） | `data/interim/` |
+| RQ2 | `paper_level_regression_ready.csv`, `paper_level_first_author_ready.csv` | `data/interim/` |
+| RQ3 | `atypicality_authorlevel_withCountry.csv` | `data/interim/` |
+| RQ4 | `atypicality_authorlevel_withCountry.csv` | `data/interim/` |
+| RQ5 | `retention_authorlevel.csv` | `data/interim/` |
+| RQ6 | `author_data_usage_stats.csv` | `data/interim/` |
+
+> 说明：
+> - RQ6 的 Word2Vec 模型仅用于 `rq6_umap_projection.jpg` 这张 UMAP 图，**非必需**；缺失时 `analysis.py` 会自动跳过该图或重训。
+> - RQ2 的一作版（`paper_level_first_author_ready.csv`）当前**暂未生成**，`analysis.py` 会在缺失时优雅跳过一作回归。
+
+**输出位置**
+
+| RQ | 回归结果 CSV | 图表 JPG |
+|----|-------------|---------|
+| RQ1 | `studies/RQ1/results/rq1_regression_results.csv` | `studies/RQ1/figures/rq1_forest_plot.jpg` |
+| RQ2 | `studies/RQ2/results/rq2_all_author_results.csv` | `studies/RQ2/figures/rq2_forest_all.jpg` |
+| RQ3 | `studies/RQ3/results/rq3_regression_results.csv` | `studies/RQ3/figures/rq3_butterfly.jpg` |
+| RQ4 | `studies/RQ4/results/rq4_regression_results.csv` | `studies/RQ4/figures/rq4_gradient_bar.jpg` |
+| RQ5 | `studies/RQ5/results/rq5_cox_results.csv` | `studies/RQ5/figures/rq5_km_curve.jpg` |
+| RQ6 | `studies/RQ6/results/rq6_descriptive_stats.csv` | `studies/RQ6/figures/rq6_descriptive_stats.jpg`, `rq6_umap_projection.jpg` |
+
+回归结果 CSV 包含字段：`label, x_var, coef, std_err, pvalue, ci_lower, ci_upper, r_squared, n_obs, converged`。
+
+**步骤**
 
 ```bash
-git clone <repo-url> Atypicality
-cd Atypicality
-```
-
-### 2. 安装依赖
-
-```bash
+git clone <repo-url> Atypicality && cd Atypicality
 pip install -r requirements.txt
+# 将上表 ready 文件放入 data/interim/ 对应位置（或先跑方案 B 的 process_data 生成）
+
+# 默认方案 A（从 data/interim/ 直接读取）
+python studies/RQ1/analysis.py
+python studies/RQ2/analysis.py
+python studies/RQ3/analysis.py
+python studies/RQ4/analysis.py
+python studies/RQ5/analysis.py
+python studies/RQ6/analysis.py
 ```
 
-### 3. 配置数据路径
+**特点**：跳过所有 `process_data.py`，`analysis.py` 直接读取 `data/interim/` 中的现成 ready 表，最快出结果；但无法修改特征工程逻辑。
 
-编辑 `configs/config.yaml`：
+---
 
-```yaml
-paths:
-  # 方式一：NAS 挂载路径（存放 100G+ 原始数据）
-  nas_mount: "/mnt/nas/atypicality/raw/"
+### 方案 B：从基础表/Q2 共享表生成 ready 表后回归
 
-  # 方式二：本地路径（如果原始数据在本地）
-  raw_sciscinet: "data/raw/sciscinet/"
-  raw_datacite: "data/raw/datacite/"
+> **适用场景**：希望修改特征工程逻辑（增减控制变量、调整缩尾/标准化参数），或需从头生成 ready 表。
+
+**两步流程**
+
+```
+process_data.py（派生层）            analysis.py --plan B（分析层）
+  基础表 + Q2 共享表  ──→  ready 表  ──→  回归结果 + 图表
+  (data/interim/ 及其 Q2/)   (data/interim/ + studies/<RQ>/)
 ```
 
-**如果已有核心中表**（`authors_with_c3_c5_avg.csv`），将其放入 `data/interim/` 即可跳过 Step 1-4。
+**所需数据（process_data 的输入）**
 
-### 4. 放置数据文件
+| 文件 | 目标路径 | 被哪些 RQ 使用 | 大小 |
+|------|---------|---------------|------|
+| `authors_with_c3_c5_avg.csv`（核心中表） | `data/interim/` | RQ1–RQ6 | 437M |
+| `authors_info.csv` | `data/interim/` | RQ6 | 44M |
+| `papers_with_embeddings.csv` | `data/interim/` | RQ2, RQ5 | 5.3G |
+| `paper_level_data_atypicality.csv` | `data/interim/` | RQ2 | 86M |
+| `topic_dataset_paperlevel_merged.csv` | `data/interim/Q2/` | RQ2, RQ5 | 160M |
+| `geographic_authorlevel_middle.csv` | `data/interim/Q2/` | RQ3, RQ4, RQ5 | 239M |
 
-将以下文件放入 `data/interim/` 对应位置：
+另需在线依赖：`wbgapi` + `pycountry`（仅 RQ3/RQ4/RQ5 用于生成 `Hemisphere`/`Develop_Status`，失败时退化为 `Unknown`）。
 
-| 文件 | 目标路径 | 说明 |
-|------|----------|------|
-| `authors_with_c3_c5_avg.csv` | `data/interim/` | 核心中表（必须） |
-| `authors_info.csv` | `data/interim/` | 作者信息（RQ6 需要） |
-| `paper_level_data_atypicality.csv` | `data/interim/` | Paper-level atypicality（RQ2 需要） |
-| `papers_with_embeddings.csv` | `data/interim/` | Embedding 数据（RQ2 需要） |
-| `Q2/` 目录下所有文件 | `data/interim/Q2/` | RQ 系列共享派生表 |
-| `modify/` 目录下所有文件 | `data/interim/modify/` | RQ2 回归宽表 |
+**按需最小子集**
 
-### 5. 从头生成中表（可选，需要 100G+ 原始数据）
+- **仅 RQ1**：核心中表
+- **仅 RQ2**：核心中表 + `paper_level_data_atypicality.csv` + `topic_dataset_paperlevel_merged.csv` + `papers_with_embeddings.csv`
+- **仅 RQ3**：核心中表 + `geographic_authorlevel_middle.csv`（+ `wbgapi`）
+- **仅 RQ4**：核心中表 + `geographic_authorlevel_middle.csv`（+ `wbgapi`）
+- **仅 RQ5**：核心中表 + `geographic_authorlevel_middle.csv` + `topic_dataset_paperlevel_merged.csv` + `papers_with_embeddings.csv`（+ `wbgapi`）
+- **仅 RQ6**：`authors_info.csv` + 核心中表
+
+**步骤**
 
 ```bash
-python scripts/build_interim_table.py
+git clone <repo-url> Atypicality && cd Atypicality
+pip install -r requirements.txt
+# 将上表输入文件放入 data/interim/ 对应位置
+
+# 第一步：生成各 RQ 的 ready 表（可修改 process_data.py 中的特征工程逻辑）
+python studies/RQ1/process_data.py    # → data/interim/authors_with_c3_c5_avg.csv 已有 + studies/RQ1/rq1_regression_ready.csv
+python studies/RQ2/process_data.py    # → data/interim/paper_level_regression_ready.csv + studies/RQ2/rq2_all_author_ready.csv
+python studies/RQ3/process_data.py    # → data/interim/atypicality_authorlevel_withCountry.csv + studies/RQ3/rq3_regression_ready.csv
+python studies/RQ4/process_data.py    # → data/interim/atypicality_authorlevel_withCountry.csv + studies/RQ4/rq4_regression_ready.csv
+python studies/RQ5/process_data.py    # → data/interim/retention_authorlevel.csv + studies/RQ5/rq5_regression_ready.csv
+python studies/RQ6/process_data.py    # → data/interim/author_data_usage_stats.csv + studies/RQ6/rq6_analysis_ready.csv
+
+# 第二步：使用方案 B 运行分析（从 studies/<RQ>/ 读取）
+python studies/RQ1/analysis.py --plan B
+python studies/RQ2/analysis.py --plan B
+python studies/RQ3/analysis.py --plan B
+python studies/RQ4/analysis.py --plan B
+python studies/RQ5/analysis.py --plan B
+python studies/RQ6/analysis.py --plan B
 ```
 
-该脚本执行 Step 1-4 完整流程：
-- Step 1-2: `BigDataProcessor` 从 SciSciNet + DataCite 生成 `authors_info.csv`
-- Step 3: `EmbeddingGenerator` 调用 OpenAlex API + Sentence Transformer 生成 embeddings
-- Step 4: `FeatureEngineer` 计算特征生成核心中表 `authors_with_c3_c5_avg.csv`
+**`--plan` 参数说明**
 
-### 6. 生成研究问题小表
+所有 `analysis.py` 均支持 `--plan {A,B}` 参数：
 
-```bash
-python studies/Q1/process_data.py
-python studies/RQ2/process_data.py
-python studies/RQ3/process_data.py
-python studies/RQ4/process_data.py
-python studies/RQ5/process_data.py
-python studies/RQ6/process_data.py
-```
+| 参数 | 行为 | 数据来源 |
+|------|------|----------|
+| `--plan A`（默认） | 从 `data/interim/` 直接读取现成 ready 表 | `process_data.py` 生成/放置的 ready 表 |
+| `--plan B` | 从 `studies/<RQ>/` 读取 process_data 输出 | `process_data.py` 生成的 `*_ready.csv` |
 
-每个 `process_data.py` 会从核心中表和 Q2 共享表中读取数据，生成该研究问题专属的回归宽表，保存在 `studies/<RQ>/` 目录下。
+错误检测：
+- 选择 `--plan B` 但对应文件不存在时，会提示"请先运行 `process_data.py`"
+- 输入 `--plan C` 等无效值时，argparse 自动拦截
 
-### 7. 回归分析与可视化
+> **注意**：RQ2 / RQ5 的 `process_data.py` 需分块读取 `papers_with_embeddings.csv`（5.3G）并做作者级时间线计算，在内存 < 8GB 的环境中可能较慢或 OOM。建议在内存充足的机器上运行。
 
-```bash
-jupyter notebook studies/Q1/analysis.ipynb
-```
+**特点**：可自由修改 `process_data.py` 中的控制变量、缩尾阈值、标准化方式，重新运行即更新 ready 表。
 
-Notebook 中调用 `src/regression.py` 和 `src/visualization.py` 完成回归建模与图表生成，图表保存在 `studies/<RQ>/figures/` 下。
+---
 
-## 代码架构说明
+### 方案对比
+
+| | 方案 A（只回归） | 方案 B（生成 ready 表后回归） |
+|---|---|---|
+| **命令示例** | `python studies/RQ1/analysis.py` | `python studies/RQ1/process_data.py && python studies/RQ1/analysis.py --plan B` |
+| **所需数据** | 各 RQ 现成 ready 表 | 基础表 + Q2 共享表（见上表） |
+| **磁盘占用** | 较小（已生成的 ready 表） | 较大（需 5.3G embeddings 等输入） |
+| **可定制性** | 无法修改特征工程 | 可自由调整 |
+| **适合场景** | 快速验证结果、出图 | 修改研究设计、敏感性分析 |
+
+## 代码架构
 
 ### `src/data_loader.py` — 统一数据读取
 
-所有数据读取通过此模块完成，替代 Colab 中的 `drive.mount` + `pd.read_csv` 模式：
+替代 Colab 中的 `drive.mount` + `pd.read_csv` 模式：
 
 ```python
 from src.data_loader import load_config, load_core_table, load_q2_table
 
 config = load_config()
-df = load_core_table(config)                    # 读取核心中表
-q2_df = load_q2_table(config, "filename.csv")   # 读取 Q2 共享表
+df = load_core_table(config)                    # 核心中表
+q2_df = load_q2_table(config, "filename.csv")   # Q2 共享表
+```
+
+### `src/q2_builders.py` — RQ 共享 builder
+
+把 Colab 中 RQ3/RQ45 的生成逻辑提炼为可复用函数：
+
+```python
+from src.q2_builders import build_atypicality_with_country, build_retention
+
+country_path = build_atypicality_with_country(config)  # → atypicality_authorlevel_withCountry.csv
+retention_path = build_retention(config)               # → retention_authorlevel.csv
 ```
 
 ### `src/regression.py` — 通用回归工具
 
-提供标准化的回归接口，自动处理缺失值、缩尾、标准化：
+自动处理缺失值、缩尾、标准化，结果可持久化：
 
 ```python
-from src.regression import run_ols, run_nb, run_cox_ph
+from src.regression import run_ols, run_nb, run_cox_ph, save_results
 
 result = run_ols(df, y_var="C3", x_var="Atypicality", controls=["H_index", "Academic_Age"])
 result = run_nb(df, y_var="H_index", x_var="Atypicality", controls=[...])
 result = run_cox_ph(df, duration_var="Duration", event_var="Event", x_var="Atypicality", controls=[...])
+
+save_results(results_dict, "studies/RQ1/results/rq1_regression_results.csv")
 ```
 
 ### `src/visualization.py` — 通用可视化
 
-统一风格的图表生成，字体/颜色/尺寸从 `config.yaml` 读取：
+字体/颜色/尺寸从 `config.yaml` 读取：
 
 ```python
 from src.visualization import plot_forest_chart, plot_km_curve, save_fig
 
 fig = plot_forest_chart(results_dict, title="Regression Results")
-save_fig(fig, "studies/Q1/figures/forest_plot.pdf")
+save_fig(fig, "studies/RQ1/figures/forest_plot.pdf")
 ```
 
 ## 新增研究问题
 
 1. 在 `studies/` 下创建新目录，如 `RQ7/`
-2. 创建 `process_data.py`：实现该问题的特征计算逻辑，生成回归宽表
-3. 创建 `analysis.ipynb`：调用 `src/regression.py` 和 `src/visualization.py` 完成分析
+2. 创建 `process_data.py`：从基础表/Q2 共享表计算特征，生成 ready 表
+3. 创建 `analysis.py`：调用 `src/regression.py` 和 `src/visualization.py` 完成分析
 4. 如需新的共享数据，放入 `data/interim/` 并在 `config.yaml` 中添加路径
 
 ## 注意事项
 
 - **所有数据文件（csv/tsv/parquet/db/pkl/npy/model）已被 .gitignore 忽略**，不会进入 Git
-- **路径不硬编码**：所有路径统一在 `configs/config.yaml` 中配置
-- **核心中表体积大（~400M）**，存放在 `data/interim/`，由代码动态生成或从 NAS 复制
-- **小表由 `process_data.py` 动态生成**，无需手动放置
+- **路径不硬编码**：统一在 `configs/config.yaml` 中配置
+- **ready 表由 `process_data.py` 动态生成**，无需手动放置；方案 A 直接读这些 ready 表，方案 B 先跑 `process_data.py` 再读 `studies/<RQ>/` 下的 `*_ready.csv`
+- **唯一在线依赖**：`wbgapi`（RQ3/RQ4/RQ5 国家信息），离线时退化为 `Unknown`
 - **Colab 工作痕迹**保留在 `colab/` 目录中（已被 .gitignore 忽略），仅供参考

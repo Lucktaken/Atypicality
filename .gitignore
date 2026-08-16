@@ -5,6 +5,9 @@
 *.db
 *.pkl
 
+# 但 studies 下的 results CSV 需要跟踪
+!studies/**/results/*.csv
+
 # 模型文件
 *.npy
 *.model
@@ -16,6 +19,9 @@ data/raw/*
 !data/raw/datacite/.gitkeep
 data/interim/*
 !data/interim/.gitkeep
+
+# 但 data/figures 下的样例图需要跟踪
+!data/figures/
 
 # Python
 __pycache__/

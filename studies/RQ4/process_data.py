@@ -1,41 +1,38 @@
 import os
 import sys
+import logging
 import pandas as pd
-import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-from src.data_loader import load_config, load_q2_table
-from src.regression import winsorize_df, standardize
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, PROJECT_ROOT)
+
+from src.data_loader import load_config
+from src.q2_builders import build_atypicality_with_country
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 
 def process_rq4_data(config: dict) -> str:
-    """RQ4: 以 Atypicality 为因变量，探究其决定因素。"""
-    df = load_q2_table(config, "atypicality_authorlevel_withCountry.csv")
+    """生成 RQ4 回归宽表。
+
+    与 RQ3 共享 Plan A 输入 atypicality_authorlevel_withCountry.csv（由共享
+    builder 生成）。这里只做「原样写出」：预处理统一由 `analysis.py` 的
+    `prepare_rq4_data` 内部完成，保证方案 A/B 结果一致。
+    """
+    country_path = build_atypicality_with_country(config)
+    df = pd.read_csv(country_path)
     logger.info(f"加载 atypicality_authorlevel_withCountry: {len(df)} 行")
-
-    y_var = "Atypicality"
-    controls = ["H_index", "Academic_Age", "Topic_Diversity", "Team_Size",
-                "Avg_Citation_w/o_Self", "Unique_Dataset_Use", "Avg_Dataset_Freq"]
-
-    available_ctrl = [c for c in controls if c in df.columns]
-    all_cols = [y_var] + available_ctrl
-    available_cols = [c for c in all_cols if c in df.columns]
-
-    reg_df = df[available_cols].dropna().copy()
-    reg_df = winsorize_df(reg_df, available_cols)
-    reg_df = standardize(reg_df, available_ctrl)
 
     output_dir = os.path.join(config["paths"]["studies_output"], "RQ4")
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, "rq4_regression_ready.csv")
-    reg_df.to_csv(output_path, index=False)
+    df.to_csv(output_path, index=False)
+    logger.info(f"RQ4 回归数据已保存至: {output_path} (shape={df.shape})")
     return output_path
 
 
 if __name__ == "__main__":
-    import logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
-    config = load_config()
+    config = load_config(os.path.join(PROJECT_ROOT, "configs", "config.yaml"))
     path = process_rq4_data(config)
-    print(f"RQ4 回归数据已保存至: {path}")
+    print(f"RQ4 回归数据: {path}")
