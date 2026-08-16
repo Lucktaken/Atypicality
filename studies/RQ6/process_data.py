@@ -1,45 +1,72 @@
 import os
 import sys
 import logging
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, PROJECT_ROOT)
 
-from src.data_loader import load_config, load_authors_info, load_core_table, load_q2_table
-from src.regression import winsorize_df
+from src.data_loader import load_authors_info, load_config, load_core_table
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
+def build_author_data_usage_stats(config: dict) -> pd.DataFrame:
+    """从核心中表派生 author_data_usage_stats.csv（本地化，不读 DataCite）。
+
+    paper_count = Total_Papers
+    unique_data = unique_data_count
+    total_data  = unique_data_count + repeated_data_usage
+    """
+    core = load_core_table(
+        config, usecols=["AuthorID", "Total_Papers", "unique_data_count", "repeated_data_usage"]
+    )
+    stats = pd.DataFrame(
+        {
+            "AuthorID": core["AuthorID"],
+            "paper_count": core["Total_Papers"],
+            "unique_data": core["unique_data_count"],
+            "total_data": core["unique_data_count"] + core["repeated_data_usage"],
+        }
+    )
+    stats["Unique_Data_Paper_Ratio"] = stats["unique_data"] / stats["paper_count"].replace(0, np.nan)
+    stats["Repetition_Novelty_Rate"] = 1.0 - (stats["unique_data"] / stats["total_data"].replace(0, np.nan))
+
+    output_path = config["paths"]["interim_author_data_usage_stats"]
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    stats.to_csv(output_path, index=False)
+    logger.info(f"author_data_usage_stats.csv 已保存: {output_path} (shape={stats.shape})")
+    return stats
+
+
 def process_rq6_data(config: dict) -> str:
+    """生成 RQ6 分析数据 rq6_analysis_ready.csv。
+
+    Word2Vec 模型（仅用于 UMAP 可视化）暂不生成。
+    """
+    stats = build_author_data_usage_stats(config)
+
     df = load_authors_info(config)
-    logger.info(f"加载作者信息: {len(df)} 行")
+    logger.info(f"加载 authors_info: {len(df)} 行")
 
-    try:
-        core_df = load_core_table(config, usecols=["AuthorID", "Atypicality_of_datasets_original_1"])
-        df = df.merge(core_df, on="AuthorID", how="left")
-    except Exception:
-        logger.warning("未找到核心中表中的 Atypicality 列")
+    core_atyp = load_core_table(config, usecols=["AuthorID", "Atypicality_of_datasets_original_1"])
+    overlap = set(df.columns) & set(core_atyp.columns) - {"AuthorID"}
+    if overlap:
+        core_atyp = core_atyp.drop(columns=list(overlap))
+    df = df.merge(core_atyp, on="AuthorID", how="left")
 
-    try:
-        stats_df = load_q2_table(config, "author_data_usage_stats.csv")
-        overlap_cols = set(df.columns) & set(stats_df.columns) - {"AuthorID"}
-        stats_df = stats_df.drop(columns=list(overlap_cols))
-        df = df.merge(stats_df, on="AuthorID", how="left")
-    except FileNotFoundError:
-        logger.warning("未找到 author_data_usage_stats.csv，跳过")
+    overlap = set(df.columns) & set(stats.columns) - {"AuthorID"}
+    stats_sub = stats.drop(columns=list(overlap)) if overlap else stats
+    df = df.merge(stats_sub, on="AuthorID", how="left")
 
     output_dir = os.path.join(config["paths"]["studies_output"], "RQ6")
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, "rq6_analysis_ready.csv")
-    if os.path.exists(output_path):
-        logger.info(f"分析数据已存在，跳过生成: {output_path}")
-        return output_path
     df.to_csv(output_path, index=False)
-    logger.info(f"RQ6 分析数据已保存至: {output_path}")
+    logger.info(f"RQ6 分析数据已保存至: {output_path} (shape={df.shape})")
     return output_path
 
 
